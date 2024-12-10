@@ -1,10 +1,17 @@
 mod balances;
 mod system;
 
+mod types {
+	pub type AccountId = String;
+	pub type Balance = u128;
+	pub type BlockNumber = u32;
+	pub type Nonce = u32;
+}
+
 #[derive(Debug)]
 pub struct Runtime {
-	system: system::Pallet,
-	balances: balances::Pallet,
+	system: system::Pallet<types::BlockNumber, types::AccountId, types::Nonce>,
+	balances: balances::Pallet<types::AccountId, types::Balance>,
 }
 
 impl Runtime {
