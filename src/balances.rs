@@ -1,6 +1,5 @@
-use std::collections::BTreeMap;
-
 use num::{CheckedAdd, CheckedSub, Zero};
+use std::collections::BTreeMap;
 
 pub trait Config: super::system::Config {
 	type Balance: CheckedAdd + CheckedSub + Zero + Copy;
@@ -26,18 +25,38 @@ impl<T: Config> Pallet<T> {
 
 	pub fn transfer(
 		&mut self,
-		from: &T::AccountId,
-		to: &T::AccountId,
+		from: T::AccountId,
+		to: T::AccountId,
 		amount: T::Balance,
 	) -> crate::support::DispatchResult {
-		let from_balance = self.balance(from);
-		let to_balance = self.balance(to);
+		let from_balance = self.balance(&from);
+		let to_balance = self.balance(&to);
 
 		let new_from_balance = from_balance.checked_sub(&amount).ok_or("Not enough founds.")?;
 		let new_to_balance = to_balance.checked_add(&amount).ok_or("overflow to_balance")?;
 
-		self.set_balance(from, new_from_balance);
-		self.set_balance(to, new_to_balance);
+		self.set_balance(&from, new_from_balance);
+		self.set_balance(&to, new_to_balance);
+		Ok(())
+	}
+}
+
+// Public enum which describes the calls that we want to expose to the dispatcher
+pub enum Call<T: Config> {
+	Transfer { to: T::AccountId, amount: T::Balance },
+}
+
+impl<T: Config> crate::support::Dispatch for Pallet<T> {
+	type Caller = T::AccountId;
+	type Call = Call<T>; // why call<T>?
+	fn dispatch(
+		&mut self,
+		caller: Self::Caller,
+		call: Self::Call,
+	) -> crate::support::DispatchResult {
+		match call {
+			Call::Transfer { to, amount } => self.transfer(caller, to, amount)?,
+		}
 		Ok(())
 	}
 }
@@ -70,24 +89,24 @@ mod tests {
 		let mut balances = super::Pallet::<TestConfig>::new();
 
 		assert!(matches!(
-			balances.transfer(&"alice".to_string(), &"bob".to_string(), 123),
+			balances.transfer("alice".to_string(), "bob".to_string(), 123),
 			Err("Not enough founds.")
 		));
 
 		balances.set_balance(&"alice".to_string(), 10000u128);
-		assert_eq!(balances.transfer(&"alice".to_string(), &"bob".to_string(), 123), Ok(()));
+		assert_eq!(balances.transfer("alice".to_string(), "bob".to_string(), 123), Ok(()));
 		assert_eq!(balances.balance(&"alice".to_string()), 9877);
 		assert_eq!(balances.balance(&"bob".to_string()), 123);
 
 		assert_eq!(
-			balances.transfer(&"alice".to_string(), &"bob".to_string(), 99999),
+			balances.transfer("alice".to_string(), "bob".to_string(), 99999),
 			Err("Not enough founds.")
 		);
 
 		balances.set_balance(&"bob".to_string(), MAX_U128);
 
 		assert!(matches!(
-			balances.transfer(&"alice".to_string(), &"bob".to_string(), 123),
+			balances.transfer("alice".to_string(), "bob".to_string(), 123),
 			Err("overflow to_balance")
 		))
 	}

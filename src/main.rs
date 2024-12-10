@@ -15,7 +15,8 @@ mod types {
 
 pub enum RuntimeCall {
 	// NOTE: Omit the from field. Caller will always be "derived" from Dispatch::Caller (And will always be types::AccountId)
-	BalancesTransfer { to: types::AccountId, amount: types::Balance },
+	// BalancesTransfer { to: types::AccountId, amount: types::Balance },
+	Balances(balances::Call<Runtime>),
 }
 
 #[derive(Debug)]
@@ -43,8 +44,8 @@ impl support::Dispatch for Runtime {
 		runtime_call: Self::Call,
 	) -> support::DispatchResult {
 		match runtime_call {
-			RuntimeCall::BalancesTransfer { to, amount } => {
-				self.balances.transfer(&caller, &to, amount)?;
+			RuntimeCall::Balances(call) => {
+				self.balances.dispatch(caller, call)?;
 			},
 		}
 		Ok(())
@@ -84,11 +85,18 @@ fn main() {
 		extrinsics: vec![
 			support::Extrinsic {
 				caller: alice.clone(),
-				call: RuntimeCall::BalancesTransfer { to: bob.clone(), amount: 50 },
+				call: RuntimeCall::Balances(balances::Call::Transfer {
+					to: bob.clone(),
+					amount: 50,
+				}),
+				// call: RuntimeCall::BalancesTransfer { to: bob.clone(), amount: 50 },
 			},
 			support::Extrinsic {
 				caller: alice.clone(),
-				call: RuntimeCall::BalancesTransfer { to: bob.clone(), amount: 20 },
+				call: RuntimeCall::Balances(balances::Call::Transfer {
+					to: bob.clone(),
+					amount: 20,
+				}),
 			},
 		],
 	};
@@ -96,6 +104,4 @@ fn main() {
 	runtime.execute_block(block_1).expect("Invalid Block");
 
 	println!("{:#?}", runtime);
-	// println!("{:?}", runtime.balances);
-	// println!("{:?}", runtime.system);
 }
