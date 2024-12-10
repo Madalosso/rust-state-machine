@@ -2,33 +2,33 @@ use std::collections::BTreeMap;
 
 use num::{CheckedAdd, CheckedSub, Zero};
 
-#[derive(Debug)]
-pub struct Pallet<AccountId, Balance> {
-	balances: BTreeMap<AccountId, Balance>,
+pub trait Config: super::system::Config {
+	type Balance: CheckedAdd + CheckedSub + Zero + Copy;
 }
 
-impl<AccountId, Balance> Pallet<AccountId, Balance>
-where
-	AccountId: Ord + Clone,
-	Balance: CheckedAdd + CheckedSub + Zero + Copy,
-{
+#[derive(Debug)]
+pub struct Pallet<T: Config> {
+	balances: BTreeMap<T::AccountId, T::Balance>,
+}
+
+impl<T: Config> Pallet<T> {
 	pub fn new() -> Self {
 		Self { balances: BTreeMap::new() }
 	}
 
-	pub fn set_balance(&mut self, who: &AccountId, amount: Balance) {
+	pub fn set_balance(&mut self, who: &T::AccountId, amount: T::Balance) {
 		self.balances.insert(who.clone(), amount);
 	}
 
-	pub fn balance(&self, who: &AccountId) -> Balance {
-		*self.balances.get(who).unwrap_or(&Balance::zero())
+	pub fn balance(&self, who: &T::AccountId) -> T::Balance {
+		*self.balances.get(who).unwrap_or(&T::Balance::zero())
 	}
 
 	pub fn transfer(
 		&mut self,
-		from: &AccountId,
-		to: &AccountId,
-		amount: Balance,
+		from: &T::AccountId,
+		to: &T::AccountId,
+		amount: T::Balance,
 	) -> Result<(), &'static str> {
 		let from_balance = self.balance(from);
 		let to_balance = self.balance(to);
@@ -45,10 +45,19 @@ where
 mod tests {
 
 	use std::u128::MAX as MAX_U128;
+	struct TestConfig;
+	impl super::super::system::Config for TestConfig {
+		type AccountId = String;
+		type BlockNumber = u32;
+		type Nonce = u32;
+	}
+	impl super::Config for TestConfig {
+		type Balance = u128;
+	}
 
 	#[test]
 	fn init_balances() {
-		let mut balances = super::Pallet::<String, u128>::new();
+		let mut balances = super::Pallet::<TestConfig>::new();
 
 		assert_eq!(balances.balance(&"Alice".to_string()), 0);
 		balances.set_balance(&"Alice".to_string(), 100);
@@ -58,7 +67,7 @@ mod tests {
 
 	#[test]
 	fn transfer() {
-		let mut balances = super::Pallet::<String, u128>::new();
+		let mut balances = super::Pallet::<TestConfig>::new();
 
 		assert!(matches!(
 			balances.transfer(&"alice".to_string(), &"bob".to_string(), 123),
