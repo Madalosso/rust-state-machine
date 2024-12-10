@@ -13,7 +13,10 @@ mod types {
 	pub type Block = crate::support::Block<Header, Extrinsic>;
 }
 
-pub enum RuntimeCall {}
+pub enum RuntimeCall {
+	// NOTE: Omit the from field. Caller will always be "derived" from Dispatch::Caller (And will always be types::AccountId)
+	BalancesTransfer { to: types::AccountId, amount: types::Balance },
+}
 
 #[derive(Debug)]
 pub struct Runtime {
@@ -39,7 +42,12 @@ impl support::Dispatch for Runtime {
 		caller: Self::Caller,
 		runtime_call: Self::Call,
 	) -> support::DispatchResult {
-		unimplemented!();
+		match runtime_call {
+			RuntimeCall::BalancesTransfer { to, amount } => {
+				self.balances.transfer(&caller, &to, amount)?;
+			},
+		}
+		Ok(())
 	}
 }
 
@@ -56,7 +64,7 @@ impl Runtime {
 
 		for support::Extrinsic { caller, call } in block.extrinsics.into_iter() {
 			self.system.inc_nonce(&caller);
-			self.dispatch(caller, call).map_err(|e| eprintln!("{}", e));
+			let _res = self.dispatch(caller, call).map_err(|e| eprintln!("{}", e));
 		}
 
 		Ok(())
@@ -71,19 +79,23 @@ fn main() {
 
 	runtime.balances.set_balance(&alice, 100);
 
-	// start emulating a block
-	runtime.system.inc_block_number();
-	assert!(runtime.system.block_number() == 1);
+	let block_1 = types::Block {
+		header: support::Header { block_number: 1 },
+		extrinsics: vec![
+			support::Extrinsic {
+				caller: alice.clone(),
+				call: RuntimeCall::BalancesTransfer { to: bob.clone(), amount: 50 },
+			},
+			support::Extrinsic {
+				caller: alice.clone(),
+				call: RuntimeCall::BalancesTransfer { to: bob.clone(), amount: 20 },
+			},
+		],
+	};
 
-	// 1st tx
-	runtime.system.inc_nonce(&alice);
-	let _res = runtime.balances.transfer(&alice, &bob, 50).map_err(|err| eprintln!("{}", err));
+	runtime.execute_block(block_1).expect("Invalid Block");
 
-	// 2nd tx
-	runtime.system.inc_nonce(&alice);
-	let _res = runtime.balances.transfer(&alice, &bob, 20).map_err(|err| eprintln!("{}", err));
-
-	// println!("{:?}", runtime);
-	println!("{:?}", runtime.balances);
-	println!("{:?}", runtime.system);
+	println!("{:#?}", runtime);
+	// println!("{:?}", runtime.balances);
+	// println!("{:?}", runtime.system);
 }
