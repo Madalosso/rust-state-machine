@@ -1,12 +1,19 @@
-mod balances;
-mod system;
+use support::Dispatch;
 
+mod balances;
+mod support;
+mod system;
 mod types {
 	pub type AccountId = String;
 	pub type Balance = u128;
 	pub type BlockNumber = u32;
 	pub type Nonce = u32;
+	pub type Extrinsic = crate::support::Extrinsic<AccountId, crate::RuntimeCall>;
+	pub type Header = crate::support::Header<BlockNumber>;
+	pub type Block = crate::support::Block<Header, Extrinsic>;
 }
+
+pub enum RuntimeCall {}
 
 #[derive(Debug)]
 pub struct Runtime {
@@ -23,9 +30,36 @@ impl balances::Config for Runtime {
 	type Balance = types::Balance;
 }
 
+impl support::Dispatch for Runtime {
+	type Caller = types::AccountId;
+	type Call = RuntimeCall;
+
+	fn dispatch(
+		&mut self,
+		caller: Self::Caller,
+		runtime_call: Self::Call,
+	) -> support::DispatchResult {
+		unimplemented!();
+	}
+}
+
 impl Runtime {
 	fn new() -> Self {
 		Self { system: system::Pallet::new(), balances: balances::Pallet::new() }
+	}
+
+	fn execute_block(&mut self, block: types::Block) -> support::DispatchResult {
+		self.system.inc_block_number();
+		if block.header.block_number != self.system.block_number() {
+			return Err("Invalid block number");
+		}
+
+		for support::Extrinsic { caller, call } in block.extrinsics.into_iter() {
+			self.system.inc_nonce(&caller);
+			self.dispatch(caller, call).map_err(|e| eprintln!("{}", e));
+		}
+
+		Ok(())
 	}
 }
 
